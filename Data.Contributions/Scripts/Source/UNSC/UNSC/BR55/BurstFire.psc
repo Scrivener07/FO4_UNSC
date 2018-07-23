@@ -2,19 +2,24 @@ Scriptname UNSC:BR55:BurstFire extends ObjectReference
 {Attaches to: BR55 "BR55" [WEAP:000017A3]}
 import UNSC:Papyrus
 
+;/
+Don't try to check for throwing happening, detect shooting happening instead.
+Cache the value of the player's current supply of ammo, and check to see if it decreased by 1 before doing the rest of the burst.
+/;
+
 Actor Player
 Weapon this
 
 ; Ammunition
 int Count = 0
+int Amount = 0
 int Capacity = 0
 
 ; Firing
 int Burst = 0
 int BurstSize = 3 const
+float BurstDelay = 0.1 const
 string FiringState = "Firing" const
-string ThrowingState = "Throwing" const
-string MeleeControl = "Melee" const
 
 ; Biped Slots
 int BipedWeapon = 41 const
@@ -40,8 +45,9 @@ EndEvent
 Event OnEquipped(Actor akActor)
 	Player = akActor
 	Capacity = GetAmmoCapacity()
-	Count = GetAmmoAmount()
-	RegisterForControl(MeleeControl)
+	Amount = GetAmmoAmount()
+	Count = GetAmmoCount()
+	;---------------------------------------------
 	RegisterForAnimationEvent(Player, WeaponFire)
 	RegisterForAnimationEvent(Player, ReloadComplete)
 	WriteLine(self, "OnEquipped", Player+" equipped: "+ToString())
@@ -50,7 +56,7 @@ EndEvent
 
 Event OnUnequipped(Actor akActor)
 	ClearState(self)
-	UnregisterForControl(MeleeControl)
+	;---------------------------------------------
 	UnregisterForAnimationEvent(Player, WeaponFire)
 	UnregisterForAnimationEvent(Player, ReloadComplete)
 	WriteLine(self, "OnUnequipped", Player+" unequipped: "+ToString())
@@ -59,17 +65,17 @@ EndEvent
 
 Event OnAnimationEvent(ObjectReference akSource, string asEventName)
 	If (asEventName == WeaponFire)
-		OnFired()
+		If (GetAmmoCount() < Count)
+			OnFired()
+			Count = GetAmmoCount()
+		Else
+			WriteLine(self, "OnAnimationEvent", "Ignoring the '"+asEventName+"' animation event.")
+		EndIf
 	ElseIf (asEventName == ReloadComplete)
 		OnReloaded()
 	Else
 		WriteLine(self, "OnAnimationEvent", "The animation event '"+asEventName+"' was unhandled.")
 	EndIf
-EndEvent
-
-
-Event OnControlDown(string asControlName)
-	ChangeState(self, ThrowingState)
 EndEvent
 
 
@@ -82,13 +88,31 @@ EndFunction
 
 
 Function OnReloaded()
-	Count = GetAmmoAmount()
-	WriteLine(self, "Reloaded", ToString())
+	Burst = 0
+	Amount = GetAmmoAmount()
+	WriteLine(self, "OnReloaded", ToString())
 EndFunction
 
 
 ; Functions
 ;---------------------------------------------
+
+int Function GetAmmoAmount()
+	int iCount = GetAmmoCount()
+	If (iCount < Capacity)
+		return iCount
+	Else
+		return Capacity
+	EndIf
+EndFunction
+
+
+int Function GetAmmoCount()
+	InstanceData:Owner instance = this.GetInstanceOwner()
+	Ammo ammoType = InstanceData.GetAmmo(instance)
+	return Player.GetItemCount(ammoType)
+EndFunction
+
 
 int Function GetAmmoCapacity()
 	ObjectMod[] array = Player.GetWornItemMods(BipedWeapon)
@@ -109,20 +133,8 @@ int Function GetAmmoCapacity()
 EndFunction
 
 
-int Function GetAmmoAmount()
-	InstanceData:Owner instance = this.GetInstanceOwner()
-	Ammo ammoType = InstanceData.GetAmmo(instance)
-	int ammoAmount = Player.GetItemCount(ammoType)
-	If (ammoAmount < Capacity)
-		return ammoAmount
-	Else
-		return Capacity
-	EndIf
-EndFunction
-
-
 string Function ToString()
-	return "Ammo ("+Count+"/"+Capacity+"), Burst:"+Burst
+	return "("+Amount+"/"+Capacity+"), Count:"+Count+", Burst:"+Burst
 EndFunction
 
 
@@ -136,14 +148,13 @@ State Firing
 	EndEvent
 
 	Function OnFired()
-		Count -= 1
+		Amount -= 1
 		Burst += 1
-
-		WriteLine(self, "Fired", ToString())
-
 		If (Burst <= BurstSize)
-			Utility.Wait(4.0)
-			this.Fire(Player) ; invokes the animation event
+			WriteLine(self, "Firing.OnFired", ToString())
+			Utility.Wait(BurstDelay)
+			Player.PlayIdle(WeaponFireIdle)
+			Utility.Wait(BurstDelay)
 		Else
 			ClearState(self)
 		EndIf
@@ -156,16 +167,9 @@ State Firing
 EndState
 
 
-State Throwing
-	Event OnBeginState(string asOldState)
-		WriteLine(self, "Throwing.OnEndState")
-	EndEvent
+; Properties
+;---------------------------------------------
 
-	Function OnFired()
-		ClearState(self)
-	EndFunction
-
-	Event OnEndState(string asNewState)
-		WriteLine(self, "Throwing.OnEndState", ToString())
-	EndEvent
-EndState
+Group Properties
+	Idle Property WeaponFireIdle Auto Const Mandatory
+EndGroup
