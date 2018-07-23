@@ -79,6 +79,35 @@ Event OnAnimationEvent(ObjectReference akSource, string asEventName)
 EndEvent
 
 
+; States
+;---------------------------------------------
+
+State Firing
+	Event OnBeginState(string asOldState)
+		WriteLine(self, "Firing.OnBeginState", ToString())
+		OnFired()
+	EndEvent
+
+	Function OnFired()
+		Amount -= 1
+		Burst += 1
+		If (Burst < BurstSize)
+			WriteLine(self, "Firing.OnFired", ToString())
+			Utility.Wait(BurstDelay)
+			Player.PlayIdle(p1stPFireSingle)
+			Utility.Wait(BurstDelay)
+		Else
+			ClearState(self)
+		EndIf
+	EndFunction
+
+	Event OnEndState(string asNewState)
+		WriteLine(self, "Firing.OnEndState", ToString())
+		Burst = 0
+	EndEvent
+EndState
+
+
 ; Methods
 ;---------------------------------------------
 
@@ -138,38 +167,10 @@ string Function ToString()
 EndFunction
 
 
-; States
-;---------------------------------------------
-
-State Firing
-	Event OnBeginState(string asOldState)
-		WriteLine(self, "Firing.OnBeginState", ToString())
-		OnFired()
-	EndEvent
-
-	Function OnFired()
-		Amount -= 1
-		Burst += 1
-		If (Burst <= BurstSize)
-			WriteLine(self, "Firing.OnFired", ToString())
-			Utility.Wait(BurstDelay)
-			Player.PlayIdle(WeaponFireIdle)
-			Utility.Wait(BurstDelay)
-		Else
-			ClearState(self)
-		EndIf
-	EndFunction
-
-	Event OnEndState(string asNewState)
-		Burst = 0
-		WriteLine(self, "Firing.OnEndState", ToString())
-	EndEvent
-EndState
-
-
 ; Properties
 ;---------------------------------------------
 
 Group Properties
-	Idle Property WeaponFireIdle Auto Const Mandatory
+	Idle Property p1stPFireSingle Auto Const Mandatory
+	{1stPFireSingle}
 EndGroup
